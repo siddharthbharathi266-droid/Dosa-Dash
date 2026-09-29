@@ -3303,28 +3303,37 @@ refreshSoundUI();
 const HAPTIC = (() => {
   let on = store.get('rr_vib', '1') === '1';
   const canVibrate = typeof navigator.vibrate === 'function';
-  let sw = null;
-  if (!canVibrate) {
-    const lab = document.createElement('label'); lab.className = 'haptic-sw'; lab.setAttribute('aria-hidden', 'true');
-    const inp = document.createElement('input'); inp.type = 'checkbox'; inp.setAttribute('switch', ''); inp.tabIndex = -1;
-    lab.appendChild(inp); document.body.appendChild(lab); sw = lab;
-  }
+  // iPhone: Safari 18 gives a haptic tick when a switch control is toggled, but only inside a tap/lift event.
+  const tick = () => {
+    try {
+      const lab = document.createElement('label'); lab.setAttribute('aria-hidden', 'true'); lab.style.display = 'none';
+      const inp = document.createElement('input'); inp.type = 'checkbox'; inp.setAttribute('switch', '');
+      lab.appendChild(inp); document.head.appendChild(lab); lab.click(); lab.remove();
+    } catch (e) {}
+  };
+  let pending = 0, deferring = false;
   function buzz(pattern) {
     if (!on || reduceMotion) return;
     const pat = Array.isArray(pattern) ? pattern : [pattern];
     if (canVibrate) { try { navigator.vibrate(pat); } catch (e) {} return; }
-    if (!sw) return;
-    // one tick per pulse in the pattern
-    let t = 0;
-    for (let k = 0; k < pat.length; k += 2) { setTimeout(() => { try { sw.click(); } catch (e) {} }, t); t += pat[k] + (pat[k + 1] || 0); }
+    // mid-swipe: wait for the finger to lift, then tick; otherwise try right away (works during taps)
+    if (deferring) { pending = Math.max(pending, Math.ceil(pat.length / 2)); return; }
+    tick(); if (pat.length > 2) setTimeout(tick, pat[0] + (pat[1] || 0));
+  }
+  function flush() { if (!pending) return; const n = pending; pending = 0; tick(); if (n > 1) setTimeout(tick, 90); }
+  if (!canVibrate) {
+    const lift = () => { deferring = false; flush(); };
+    window.addEventListener('touchend', lift, true); window.addEventListener('pointerup', lift, true);
+    window.addEventListener('touchstart', () => { deferring = true; }, { capture: true, passive: true });
+    window.addEventListener('touchcancel', () => { deferring = false; pending = 0; }, true);
   }
   function refresh() { $('vibBtn').textContent = 'Vibration: ' + (on ? 'on' : 'off'); }
-  $('vibBtn').addEventListener('click', () => { on = !on; store.set('rr_vib', on ? '1' : '0'); refresh(); buzz(20); });
+  $('vibBtn').addEventListener('click', () => { on = !on; store.set('rr_vib', on ? '1' : '0'); refresh(); deferring = false; buzz(20); });
   refresh();
   return { buzz };
 })();
 {
-  const HP = { crash: [70, 40, 140], stumble: 45, power: [15, 40, 15], clang: 35, box: [12, 30, 12], coffee: 25, jump: 10 };
+  const HP = { crash: [70, 40, 140], stumble: 45, power: [15, 40, 15], clang: 35, box: [12, 30, 12], coffee: 25, jump: 10, swish: 8, roll: 10 };
   for (const [k, pat] of Object.entries(HP)) { const f = SFX[k]; SFX[k] = function (...a) { HAPTIC.buzz(pat); return f.apply(this, a); }; }
   const land = SFX.land; SFX.land = function (hard) { if (hard) HAPTIC.buzz(18); return land.apply(this, arguments); };
 }
