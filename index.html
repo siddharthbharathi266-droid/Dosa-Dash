@@ -880,6 +880,10 @@ const DUR = { x2: 10, magnet: 10, car: 10, jet: 8, sneakers: 12, coffee: 6 };
 const POWER_GEO = new T3.BoxGeometry(0.7, 0.7, 0.7);
 // ---- 3D power-up pickups: each one looks like the thing it gives you ----
 const POWER_PROTO = {};
+// the boost power looks different for each runner: Sneha's watermelon, Srividhya's filter coffee, Usha's nellikaai
+const BOOST_NAME = { coffee: 'Filter coffee', melon: 'Watermelon', nelli: 'Nellikaai' };
+const BOOST_COL = { coffee: '#c98a4a', melon: '#ff4d6d', nelli: '#9ccc3c' };
+function boostLook() { try { return (runner().spec.special) || 'coffee'; } catch (e) { return 'coffee'; } }
 function faceTex(bg, fg, txt, font) { return canvasTex(128, 128, (c, w, h) => { c.fillStyle = bg; c.beginPath(); c.arc(64, 64, 62, 0, Math.PI * 2); c.fill(); c.lineWidth = 7; c.strokeStyle = 'rgba(255,255,255,.7)'; c.beginPath(); c.arc(64, 64, 54, 0, Math.PI * 2); c.stroke(); c.fillStyle = fg; c.font = font || '64px "Lilita One", "Arial Black", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(txt, 64, 70); }); }
 function makePowerModel(kind) {
   const g = new T3.Group();
@@ -911,6 +915,34 @@ function makePowerModel(kind) {
     const steam = new T3.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false });
     for (let i = 0; i < 3; i++) g.add(mesh(SPH, steam, (i - 1) * 0.06, 0.38 + i * 0.1, 0, 0.05 + i * 0.012));
     g.scale.setScalar(1.3);
+  } else if (kind === 'melon') {
+    // a juicy watermelon slice: red flesh, white and green rind, black seeds on both faces
+    const sector = (r0, r1, a0, a1) => { const sh = new T3.Shape(); if (r0 <= 0) { sh.moveTo(0, 0); sh.lineTo(Math.cos(a0) * r1, Math.sin(a0) * r1); } else sh.absarc(0, 0, r0, a1, a0, true); sh.absarc(0, 0, r1, a0, a1, false); sh.closePath(); return sh; };
+    const A0 = -Math.PI / 2 - 0.62, A1 = -Math.PI / 2 + 0.62, R = 0.58, D = 0.13;
+    const ex = (sh, d, mat) => { const geo = new T3.ExtrudeGeometry(sh, { depth: d, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.012, bevelSegments: 2, curveSegments: 24 }); geo.translate(0, 0, -d / 2); return new T3.Mesh(geo, mat); };
+    g.add(ex(sector(0, R - 0.05, A0, A1), D, toon(0xff3b52)));
+    g.add(ex(sector(R - 0.05, R - 0.015, A0, A1), D, toon(0xf3f7df)));
+    g.add(ex(sector(R - 0.015, R + 0.05, A0, A1), D + 0.01, toon(0x2f8f3a)));
+    g.add(ex(sector(R + 0.02, R + 0.05, A0 + 0.05, A1 - 0.05), D + 0.02, toon(0x1f6b2a)));
+    const seed = toon(0x1a1414);
+    for (const [r, a] of [[0.22, -0.25], [0.3, 0.2], [0.38, -0.05], [0.4, 0.38], [0.42, -0.4], [0.3, -0.5]]) for (const z of [-1, 1]) {
+      const ang = -Math.PI / 2 + a; const sd = mesh(SPH, seed, Math.cos(ang) * r, Math.sin(ang) * r, z * (D / 2 + 0.018), 0.022, 0.036, 0.01); sd.rotation.z = ang + Math.PI / 2; g.add(sd);
+    }
+    g.position.y = 0; g.children.forEach(m => m.position.y += 0.3); g.scale.setScalar(1.2);
+  } else if (kind === 'nelli') {
+    // nellikaai: glossy pale-green gooseberries with faint ribs, a stalk and a leaf
+    const berry = new T3.MeshPhongMaterial({ color: 0xc9e27c, emissive: 0x2c3a10, specular: 0xffffff, shininess: 90 });
+    const rib = new T3.MeshBasicMaterial({ color: 0xe9f5c4, transparent: true, opacity: 0.55 }), stem = toon(0x6b4a2a), leaf = toon(0x3f9a3a);
+    const one = (x, y, z, r) => {
+      const b = new T3.Group(); b.position.set(x, y, z);
+      b.add(mesh(new T3.SphereGeometry(r, 28, 20), berry, 0, 0, 0, 1, 0.92, 1));
+      for (let k = 0; k < 6; k++) { const t = new T3.Mesh(new T3.TorusGeometry(r * 1.004, r * 0.012, 4, 40), rib); t.rotation.y = k / 6 * Math.PI; t.scale.y = 0.92; b.add(t); }
+      b.add(mesh(new T3.CylinderGeometry(r * 0.06, r * 0.08, r * 0.3, 8), stem, 0, r * 0.98, 0));
+      return b;
+    };
+    g.add(one(0, 0, 0, 0.28)); g.add(one(0.27, -0.12, -0.08, 0.18));
+    const lf = new T3.Mesh(new T3.SphereGeometry(1, 16, 8), leaf); lf.scale.set(0.15, 0.015, 0.065); lf.position.set(-0.1, 0.33, 0.02); lf.rotation.z = 0.35; g.add(lf);
+    g.scale.setScalar(1.15);
   } else if (kind === 'sneakers') {
     const green = toon(0x2bb34a), white = toon(0xf6f4ef), steel = toon(0xc9ced6);
     g.add(mesh(new T3.CapsuleGeometry(0.13, 0.3, 6, 12).rotateZ(Math.PI / 2), green, 0.02, 0.06, 0, 1, 0.9, 1.1));
@@ -935,6 +967,7 @@ function makePowerModel(kind) {
   return g;
 }
 function powerModel(kind) {
+  if (kind === 'coffee') kind = boostLook();
   if (!POWER_PROTO[kind]) POWER_PROTO[kind] = makePowerModel(kind);
   const m = POWER_PROTO[kind].clone(); m.scale.multiplyScalar(1.35);
   m.traverse(o => { if (o.isMesh) o.castShadow = true; });
@@ -2010,10 +2043,10 @@ function bakeGroup(root) {
   return root;
 }
 function asHuman(h, spec) { bakeGroup(h.root); h.spec = spec; h.props = !!spec.props; h.spin.position.y = 0.62; h.body.position.y = -0.62; return h; }
-const SNEHA = asHuman(buildSneha(), { name: 'Sneha', tag: 'Curls, glasses, infinity pendant' });
-const SRIVIDHYA = asHuman(buildSrividhya(), { name: 'Srividhya', tag: 'Pan and ladle at the ready', props: true });
+const SNEHA = asHuman(buildSneha(), { name: 'Sneha', tag: 'Curls, glasses, infinity pendant', special: 'melon' });
+const SRIVIDHYA = asHuman(buildSrividhya(), { name: 'Srividhya', tag: 'Pan and ladle at the ready', props: true, special: 'coffee' });
 const CHASER = asHuman(buildChaser(), { name: 'Sibi' });
-const USHA = asHuman(buildUsha(), { name: 'Usha' });
+const USHA = asHuman(buildUsha(), { name: 'Usha', special: 'nelli' });
 const RUNNERS = [SNEHA, SRIVIDHYA, USHA];
 for (const h of [SNEHA, SRIVIDHYA, USHA, CHASER]) { h.root.rotation.y = Math.PI; scene.add(h.root); }
 const SASHY = buildSashy(); bakeGroup(SASHY.root); SASHY.root.rotation.y = Math.PI; SASHY.root.scale.setScalar(0.95); scene.add(SASHY.root);
@@ -2105,6 +2138,7 @@ const JETPACK = (() => {
   g.add(mesh(BOX, dk, 0, 0.05, -0.02, 0.4, 0.14, 0.1));
   g.userData.flames = flames; g.visible = false; scene.add(g); return g;
 })();
+function tintSteam() { const c = { coffee: 0xffffff, melon: 0xff6b81, nelli: 0xc6e87a }[boostLook()]; STEAM.children.forEach(p => p.material.color.setHex(c)); }
 const STEAM = (() => { const g = new T3.Group(); for (let i = 0; i < 8; i++) g.add(new T3.Mesh(SPH, new T3.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false }))); g.visible = false; scene.add(g); return g; })();
 
 const SHADOW_MAT = new T3.MeshBasicMaterial({ color: 0x2a1c20, transparent: true, opacity: 0.28, depthWrite: false });
@@ -2426,7 +2460,7 @@ function spawnChunk() {
     if (!G.powBag.length) { G.powBag = ['car', 'x2', 'magnet', 'jet', 'sneakers', 'coffee', 'box'].sort(() => Math.random() - 0.5); if (G.powBag[0] === G.lastPow) G.powBag.push(G.powBag.shift()); }
     c.t = 'power'; c.kind = G.powBag.shift(); G.lastPow = c.kind;
     G.nextPowD = wd + rand(110, 170);
-    c.m = new T3.Group(); c.m.add(powerModel(c.kind)); c.m.add(glowSprite(POW_COL[c.kind], 2.0)); scene.add(c.m);
+    c.m = new T3.Group(); c.m.add(powerModel(c.kind)); c.m.add(glowSprite(c.kind === 'coffee' ? BOOST_COL[boostLook()] : POW_COL[c.kind], 2.0)); scene.add(c.m);
   }
   G.spawnZ = base + pat.len + 9 + Math.max(G.speed, 12) * 0.45;
 }
@@ -2570,13 +2604,13 @@ function collect(o) {
   o.gone = true; scene.remove(o.m);
   if (o.t === 'power') {
     if (o.kind === 'box') SFX.box(); else if (o.kind === 'coffee') SFX.coffee(); else SFX.power();
-    if (o.x !== undefined) emit(FX_ADD, o.x, o.y, -o.a, 22, { col: POW_COL[o.kind], life: 0.6, size: [0.5, 0.08], ring: 5, spread: 0.05 });
+    if (o.x !== undefined) emit(FX_ADD, o.x, o.y, -o.a, 22, { col: o.kind === 'coffee' ? BOOST_COL[boostLook()] : POW_COL[o.kind], life: 0.6, size: [0.5, 0.08], ring: 5, spread: 0.05 });
     if (o.kind === 'x2') { G.x2 = 10; toast('2x score!'); }
     else if (o.kind === 'magnet') { G.magnet = 10; toast('Coin magnet!'); }
     else if (o.kind === 'car') { G.cars++; updateCarBtn(); toast('+1 Turbo 18'); }
     else if (o.kind === 'jet') startJet();
     else if (o.kind === 'sneakers') { G.sneak = DUR.sneakers; toast('Spring sneakers!'); }
-    else if (o.kind === 'coffee') { G.coffee = DUR.coffee; G.stumble = 0; toast('Filter coffee boost!'); }
+    else if (o.kind === 'coffee') { G.coffee = DUR.coffee; G.stumble = 0; toast(BOOST_NAME[boostLook()] + ' boost!'); tintSteam(); }
     else if (o.kind === 'box') {
       const r = Math.random();
       if (r < 0.55) { const n = 50 + ((Math.random() * 5) | 0) * 50; G.coins += n; G.score += n * 5; toast('+' + n + ' coins'); }
@@ -3187,7 +3221,7 @@ function hud() {
   $('hudDist').textContent = Math.floor(G.dist) + ' m';
   $('hudCoins').textContent = G.coins;
   $('hudMult').textContent = 'x' + (G.mult * (G.x2 > 0 ? 2 : 1));
-  const pw = G.jet > 0 ? ['Jetpack', G.jet / DUR.jet] : G.coffee > 0 ? ['Filter coffee', G.coffee / DUR.coffee] : G.car > 0 ? ['Turbo 18', G.car / DUR.car] : G.sneak > 0 ? ['Spring sneakers', G.sneak / DUR.sneakers] : G.x2 > 0 ? ['2x Score', G.x2 / DUR.x2] : G.magnet > 0 ? ['Coin magnet', G.magnet / DUR.magnet] : null;
+  const pw = G.jet > 0 ? ['Jetpack', G.jet / DUR.jet] : G.coffee > 0 ? [BOOST_NAME[boostLook()], G.coffee / DUR.coffee] : G.car > 0 ? ['Turbo 18', G.car / DUR.car] : G.sneak > 0 ? ['Spring sneakers', G.sneak / DUR.sneakers] : G.x2 > 0 ? ['2x Score', G.x2 / DUR.x2] : G.magnet > 0 ? ['Coin magnet', G.magnet / DUR.magnet] : null;
   $('hudPower').hidden = !pw;
   if (pw) { $('hudPowerName').textContent = pw[0]; $('hudPowerBar').style.width = (pw[1] * 100) + '%'; }
   $('chase').hidden = !(G.stumble > 0 && G.t > 3 && G.state === 'playing');
@@ -3276,7 +3310,7 @@ $('nameCancel').addEventListener('click', () => { $('playerName').value = store.
     ['h', 'Power-ups'],
     ['i', 'jet', '<b>Jetpack</b> flies you over everything for 8 seconds.'],
     ['i', 'sneakers', '<b>Spring sneakers</b> for super-high jumps.'],
-    ['i', 'coffee', '<b>Filter coffee</b> boost: faster, and nothing can stop you.'],
+    ['i', 'coffee', '<b>Boost</b>: faster, and nothing can stop you. Sneha gets a watermelon, Srividhya filter coffee, Usha a nellikaai.'],
     ['i', 'magnet', '<b>Coin magnet</b> pulls in every coin nearby.'],
     ['i', 'x2', '<b>2x score</b> for 10 seconds.'],
     ['i', 'car', '<b>Turbo 18</b>: one more to save for later.'],
